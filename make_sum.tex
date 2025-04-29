@@ -1,0 +1,93 @@
+\documentclass{article}
+\usepackage{amsmath, amssymb}
+
+\title{Proof for \texttt{make\_sum}}
+\author{OpenDP Team}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\section{Summary}
+
+The function \texttt{opendp\_transformations\_\_make\_sum} exposes an FFI wrapper around the Rust implementation of \texttt{make\_sum}, enabling dynamic dispatch over the type parameters of the transformation at runtime.
+
+This proof validates:
+\begin{itemize}
+  \item Correctness of type dispatch
+  \item Safety of FFI boundary crossing
+  \item Preservation of transformation properties (stability, privacy, and correctness) through the FFI layer
+\end{itemize}
+
+\section{FFI Definition}
+
+The function signature is:
+
+\begin{verbatim}
+#[no_mangle]
+pub extern "C" fn opendp_transformations__make_sum(
+    input_domain: *const AnyDomain,
+    input_metric: *const AnyMetric,
+) -> FfiResult<*mut AnyTransformation>
+\end{verbatim}
+
+The function:
+\begin{enumerate}
+  \item Extracts the runtime types of \texttt{input\_domain} and \texttt{input\_metric}
+  \item Dispatches over all valid combinations of \texttt{(MI, T)} where:
+    \begin{itemize}
+      \item \texttt{MI} $\in$ \{\texttt{SymmetricDistance}, \texttt{InsertDeleteDistance}\}
+      \item \texttt{T} $\in$ \texttt{@numbers}
+    \end{itemize}
+  \item Invokes \texttt{make\_sum<MI, T>} for the dispatched types
+  \item Returns the result as an \texttt{AnyTransformation} wrapped in an \texttt{FfiResult}
+\end{enumerate}
+
+\section{Dispatch Correctness}
+
+Dispatch occurs via:
+\begin{verbatim}
+dispatch!(monomorphize, [
+  (MI, [SymmetricDistance, InsertDeleteDistance]),
+  (T, @numbers)
+], (input_domain, input_metric))
+\end{verbatim}
+
+This guarantees:
+\begin{itemize}
+  \item Only valid metrics \texttt{MI} are used
+  \item Only numeric types \texttt{T} are allowed, matching the trait bounds of \texttt{MakeSum<MI>}
+  \item At compile time, Rust ensures that for each dispatched monomorphization:
+    \begin{verbatim}
+    (VectorDomain<AtomDomain<T>>, MI): MetricSpace
+    \end{verbatim}
+    is implemented, and that \texttt{T: MakeSum<MI>}
+\end{itemize}
+
+\section{Transformation Correctness}
+
+The transformation \texttt{make\_sum<MI, T>} constructs a sum over a \texttt{VectorDomain<AtomDomain<T>>} with a given metric \texttt{MI}. Its correctness and stability properties are ensured by the Rust implementation and are preserved under FFI:
+
+\begin{itemize}
+  \item Input validation and domain/metric downcasting occur via:
+    \begin{verbatim}
+    downcast_ref::<VectorDomain<AtomDomain<T>>>()?
+    downcast_ref::<MI>()?
+    \end{verbatim}
+  \item Fallible error handling ensures safe propagation of errors across the FFI boundary
+  \item The monomorphized transformation is converted to \texttt{AnyTransformation} via:
+    \begin{verbatim}
+    .into_any()
+    \end{verbatim}
+  \item FFI result wrapping occurs via:
+    \begin{verbatim}
+    .into()
+    \end{verbatim}
+\end{itemize}
+
+\section{Conclusion}
+
+The \texttt{opendp\_transformations\_\_make\_sum} function safely and correctly exposes the \texttt{make\_sum} transformation via FFI. It guarantees correct type dispatch, maintains the stability and correctness of the transformation, and safely handles errors via the OpenDP FFI result system.
+
+\end{document}
