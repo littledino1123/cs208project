@@ -1,0 +1,82 @@
+\documentclass{article}
+\input{lib.sty}
+
+\title{\texttt{fn make\_lipschitz\_float\_mul}}
+\author{David Erb}
+\date{}
+\lstdefinelanguage{Rust}{
+  morekeywords={let,mut,fn,enum,impl,match,if,else,loop,while,for,in,break,continue,return,struct,trait,self,Self,mod,ref,move,crate,super,where,use,as,const,static,unsafe,extern,dyn,await,async},
+  sensitive=true,
+  morecomment=[l]{//},
+  morecomment=[s]{/*}{*/},
+  morestring=[b]",
+}
+
+
+\begin{document}
+
+\maketitle
+
+Proves soundness of \texttt{fn make\_lipschitz\_float\_mul}
+
+%\subsection*{Vetting History}
+%\begin{itemize}
+%    \item \vettingPR{512}
+%end{itemize}
+
+\section{Hoare Triple}
+\subsection*{Precondition}
+To ensure the correctness of the output, we require the following preconditions:
+
+\begin{itemize}
+    \item Type \texttt{TA} must have Datatype \texttt{Float}.
+\end{itemize}
+
+\subsection*{Pseudocode}
+\lstinputlisting[language=Rust]{./pseudocode/make_lipschitz_mul.rs}
+
+\subsubsection*{Postconditions}
+\validTransformation{\texttt{(input\_domain, input\_metric, constant, bounds)}}{\texttt{make\_lipschitz\_float\_mul}}
+
+\section{Proof}
+
+\begin{proof}
+    \textbf{(Part 1 - appropriate output domain).}
+    Conditioning on the correct implementation of \texttt{saturating\_mul}, the output is going to be in \texttt{AtomDomain::new\_non\_nan()} as long as both \texttt{constant} and the return value of \texttt{total\_clamp( lower, upper)?} are in \texttt{AtomDomain::new\_non\_nan()}.
+    
+    \texttt{constant} is of type \texttt{TA} which is checked to be not nan (line TODO). Similarly, the bounds as well as \texttt{arg} are non-nan. Thus, by the definition of ProductOrd, the preconditions of \texttt{total\_clamp} are satisfied, and therefore the output is non-nan. Thus, for all settings of input arguments, the function returns a dataset in the ouput domain.
+\end{proof}
+
+\begin{proof}
+    \textbf{(Part 2 - stability map).} Take any two elements $u,v$ in the \texttt{input\_domain} as bounds $L,U$ and any pair \texttt{(d\_in, d\_out)}. Assume $u,v$ are \texttt{d\_in}-close under the \texttt{input\_metric} and that \texttt{stability\_map(d\_in)} $\le$ \texttt{d\_out}. Let \texttt{IM = input\_metric, OM = output\_metric}.
+
+\begin{align*}
+  d_{OM}(f(u),f(v))
+  &= \bigl|f(u)-f(v)\bigr|
+    &&\text{since \texttt{OM} is \texttt{AbsoluteDistance}}\\
+  &= \Bigl|\mathrm{fl}\bigl(c\,\min\{U,\max\{L,u\}\}\bigr)
+            -\;\mathrm{fl}\bigl(c\,\min\{U,\max\{L,v\}\}\bigr)\Bigr|\\
+  &= \Bigl|\,c\,\min\{U,\max\{L,u\}\} + e
+           \;-\;\bigl(c\,\min\{U,\max\{L,v\}\}+e'\bigr)\Bigr|\\
+  &= \Bigl|\,c\bigl(\min\{U,\max\{L,u\}\}-\min\{U,\max\{L,v\}\}\bigr)
+           \;+\;(e - e')\Bigr|\\
+  &\le |c|\;\Bigl|\min\{U,\max\{L,u\}\}-\min\{U,\max\{L,v\}\}\Bigr|
+       \;+\;|e|+|e'|
+    &&\text{by the triangle inequality}\\
+  &\le |c|\;|u - v|
+       \;+\;|e|+|e'|
+    &&\text{since }\min\{U,\max\{L,\,\cdot\,\}\}\text{ is 1-Lipschitz}\\
+  &\le |c|\,d_{\mathrm{in}}
+       \;+\;2\,\max(|e|,|e'|)
+    &&\bigl|u-v\bigr|\le d_{\mathrm{in}}\\
+  &\le |c|\,d_{\mathrm{in}}
+       \;+\;\mathrm{ULP}(w)
+    &&|e|,|e'|\le\tfrac12\,\mathrm{ULP}(w),\;w=\max(|L|,|U|)\,|c|\\
+  &= \texttt{stability\_map}(d_{\mathrm{in}})
+    &&\text{by line \ref{line:stability-map} of the pseudocode}\\
+  &\le d_{\mathrm{out}}
+    &&\text{by the second assumption.}
+\end{align*}
+
+\end{proof}
+\end{document}
